@@ -496,6 +496,45 @@
     `;
   }
 
+  function estimateTickLabelWidth(label) {
+    return Math.max(46, String(label).length * 7.2);
+  }
+
+  function buildXAxisTicks(periodTicks, tickStep, xScale, plotLeft, plotRight) {
+    const lastPoint = periodTicks[periodTicks.length - 1];
+    const candidates = periodTicks
+      .filter((point, index) => index % tickStep === 0 || point === lastPoint)
+      .map((point) => {
+        const width = estimateTickLabelWidth(point.periodLabel);
+        const center = xScale(point.periodSort);
+        return {
+          point,
+          center,
+          isLast: point === lastPoint,
+          left: Math.max(plotLeft, center - width / 2),
+          right: Math.min(plotRight, center + width / 2),
+        };
+      });
+
+    const kept = [];
+    for (const candidate of candidates) {
+      const previous = kept[kept.length - 1];
+      if (!previous || candidate.left - previous.right >= 10) {
+        kept.push(candidate);
+        continue;
+      }
+
+      if (candidate.isLast) {
+        while (kept.length && candidate.left - kept[kept.length - 1].right < 10) {
+          kept.pop();
+        }
+        kept.push(candidate);
+      }
+    }
+
+    return kept.map((item) => item.point);
+  }
+
   function renderLineChart(container, series, options) {
     const values = [];
     for (const one of series) {
@@ -543,8 +582,7 @@
       .map((tick) => `<line class="grid-line" x1="${pad.left}" x2="${width - pad.right}" y1="${y(tick)}" y2="${y(tick)}"></line>
         <text x="${pad.left - 8}" y="${y(tick) + 4}" text-anchor="end">${options.percent ? nf0.format(tick) + "%" : formatCompact(tick)}</text>`)
       .join("");
-    const xTicks = periodTicks
-      .filter((_, index) => index % tickStep === 0 || index === periodTicks.length - 1)
+    const xTicks = buildXAxisTicks(periodTicks, tickStep, x, pad.left, width - pad.right)
       .map((point) => `<text x="${x(point.periodSort)}" y="${height - 28}" text-anchor="middle">${escapeHtml(point.periodLabel)}</text>`)
       .join("");
     const zeroLine = options.percent && yMin < 0 && yMax > 0 ? `<line class="zero-line" x1="${pad.left}" x2="${width - pad.right}" y1="${y(0)}" y2="${y(0)}"></line>` : "";
