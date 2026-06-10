@@ -500,39 +500,46 @@
     return Math.max(46, String(label).length * 7.2);
   }
 
-  function buildXAxisTicks(periodTicks, tickStep, xScale, plotLeft, plotRight) {
+  function buildXAxisTicks(periodTicks, tickStep, xScale, plotLeft, plotRight, selectedTick) {
     const lastPoint = periodTicks[periodTicks.length - 1];
-    const candidates = periodTicks
-      .filter((point, index) => index % tickStep === 0 || point === lastPoint)
-      .map((point) => {
-        const width = estimateTickLabelWidth(point.periodLabel);
-        const center = xScale(point.periodSort);
-        return {
-          point,
-          center,
-          isLast: point === lastPoint,
-          left: Math.max(plotLeft, center - width / 2),
-          right: Math.min(plotRight, center + width / 2),
-        };
+    const candidateMap = new Map();
+    const addCandidate = (point, priority) => {
+      if (!point) return;
+      const existing = candidateMap.get(point.periodKey);
+      if (existing && existing.priority >= priority) return;
+      const width = estimateTickLabelWidth(point.periodLabel);
+      const center = xScale(point.periodSort);
+      candidateMap.set(point.periodKey, {
+        point,
+        priority,
+        center,
+        left: Math.max(plotLeft, center - width / 2),
+        right: Math.min(plotRight, center + width / 2),
       });
+    };
+
+    periodTicks.forEach((point, index) => {
+      if (index % tickStep === 0) addCandidate(point, 1);
+    });
+    addCandidate(lastPoint, 2);
+    addCandidate(selectedTick, 3);
 
     const kept = [];
+    const candidates = Array.from(candidateMap.values()).sort((a, b) => b.priority - a.priority || a.center - b.center);
     for (const candidate of candidates) {
-      const previous = kept[kept.length - 1];
-      if (!previous || candidate.left - previous.right >= 10) {
+      const overlaps = kept.filter((item) => candidate.left - item.right < 10 && item.left - candidate.right < 10);
+      if (!overlaps.length) {
         kept.push(candidate);
         continue;
       }
 
-      if (candidate.isLast) {
-        while (kept.length && candidate.left - kept[kept.length - 1].right < 10) {
-          kept.pop();
-        }
+      if (overlaps.every((item) => item.priority < candidate.priority)) {
+        for (const item of overlaps) kept.splice(kept.indexOf(item), 1);
         kept.push(candidate);
       }
     }
 
-    return kept.map((item) => item.point);
+    return kept.sort((a, b) => a.center - b.center).map((item) => item.point);
   }
 
   function renderLineChart(container, series, options) {
@@ -582,7 +589,8 @@
       .map((tick) => `<line class="grid-line" x1="${pad.left}" x2="${width - pad.right}" y1="${y(tick)}" y2="${y(tick)}"></line>
         <text x="${pad.left - 8}" y="${y(tick) + 4}" text-anchor="end">${options.percent ? nf0.format(tick) + "%" : formatCompact(tick)}</text>`)
       .join("");
-    const xTicks = buildXAxisTicks(periodTicks, tickStep, x, pad.left, width - pad.right)
+    const selectedTick = selectedPoint ? periodTicks.find((point) => point.periodKey === selectedPoint.periodKey) : null;
+    const xTicks = buildXAxisTicks(periodTicks, tickStep, x, pad.left, width - pad.right, selectedTick)
       .map((point) => `<text x="${x(point.periodSort)}" y="${height - 28}" text-anchor="middle">${escapeHtml(point.periodLabel)}</text>`)
       .join("");
     const zeroLine = options.percent && yMin < 0 && yMax > 0 ? `<line class="zero-line" x1="${pad.left}" x2="${width - pad.right}" y1="${y(0)}" y2="${y(0)}"></line>` : "";
