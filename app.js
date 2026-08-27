@@ -1,6 +1,10 @@
 (function () {
   "use strict";
 
+  if (window.location.search.includes("refresh=")) {
+    window.history.replaceState(null, document.title, window.location.pathname + window.location.hash);
+  }
+
   const DATA = window.MOC_EXPORT_DATA;
   const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
   const COLORS = ["#0f766e", "#2563eb", "#b45309", "#be123c", "#15803d", "#7c3aed", "#0891b2", "#c2410c", "#4f46e5", "#047857"];
